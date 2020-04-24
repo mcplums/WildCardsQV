@@ -35,6 +35,8 @@ contract WildCardsQV is Ownable, MinterRole {
     WildCardToken public wildCardToken;
     uint256 oneToken = 10**18;
     address burnAddress = 0x000000000000000000000000000000000000dEaD;
+    bool voteCreated = false;
+    address[] addressesOfCharities;
 
     event VoteCasted(address voter, uint CharityID, uint256 weight);
 
@@ -77,9 +79,12 @@ contract WildCardsQV is Ownable, MinterRole {
 
     // new function to create a much of Charities at once for voting
     function createVote(address[] memory _addressesOfCharities, uint _voteExpirationTime) public {
+        require(!voteCreated, "Vote already created");
+        addressesOfCharities = _addressesOfCharities;
         for (uint i = 0; i < _addressesOfCharities.length; i++) {
             createCharity("", _voteExpirationTime, _addressesOfCharities[i]);
         }
+        voteCreated = true;
     }
 
     /**
@@ -177,11 +182,24 @@ contract WildCardsQV is Ownable, MinterRole {
         return Charitys[_CharityID].expirationTime;
     }
 
+    function getWinner() public view returns (uint) {
+        uint _winner;
+        uint _highestVotes;
+        for (uint i = 0; i < addressesOfCharities.length; i++) {
+            uint _votes = countVotesPerCharity(i);
+            if (_votes > _highestVotes) {
+                _winner = i;
+                _highestVotes = _votes;
+            }
+        }
+        return _winner;
+    }
+
     /**
     * @dev counts the votes for a Charity. Returns (yeays, nays)
     * @param _CharityID the Charity id
     */
-    function countVotes(uint256 _CharityID) public view returns (uint, uint) {
+    function countVotesPerCharity(uint256 _CharityID) public view returns (uint) {
         uint yesVotes = 0;
         uint noVotes = 0;
 
@@ -197,7 +215,7 @@ contract WildCardsQV is Ownable, MinterRole {
             }
         }
 
-        return (yesVotes, noVotes);
+        return (yesVotes);
 
     }
 
