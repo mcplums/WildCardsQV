@@ -20,7 +20,7 @@ interface WildCardToken
 
 /**
  * @title WildCardsQV
- * @dev the manager for proposals / votes
+ * @dev the manager for Charitys / votes
  */
 contract WildCardsQV is Ownable, MinterRole {
     using SafeMath for uint256;
@@ -36,24 +36,25 @@ contract WildCardsQV is Ownable, MinterRole {
     uint256 oneToken = 10**18;
     address burnAddress = 0x000000000000000000000000000000000000dEaD;
 
-    event VoteCasted(address voter, uint ProposalID, uint256 weight);
+    event VoteCasted(address voter, uint CharityID, uint256 weight);
 
-    event ProposalCreated(
+    event CharityCreated(
         address creator,
-        uint256 ProposalID,
+        uint256 CharityID,
         string description,
         uint votingTimeInHours
     );
 
-    enum ProposalStatus {IN_PROGRESS, TALLY, ENDED}
+    enum CharityStatus {IN_PROGRESS, TALLY, ENDED}
 
-    struct Proposal {
+    struct Charity {
         address creator;
-        ProposalStatus status;
+        CharityStatus status;
         uint256 yesVotes;
         uint256 noVotes;
         string description;
         address[] voters;
+        address addressOfCharity; // <--added
         uint expirationTime;
         mapping(address => Voter) voterInfo;
     }
@@ -64,8 +65,8 @@ contract WildCardsQV is Ownable, MinterRole {
         uint256 weight;
     }
 
-    mapping(uint256 => Proposal) public Proposals;
-    uint public ProposalCount;
+    mapping(uint256 => Charity) public Charitys;
+    uint public CharityCount;
 
     constructor(LoyaltyToken _addressOfLoyalyTokenContract, WildCardToken _addressOfWildCardTokenContract) public {
         loyaltyToken = _addressOfLoyalyTokenContract;
@@ -74,112 +75,121 @@ contract WildCardsQV is Ownable, MinterRole {
         name = "QV Voting";
     }
 
+    // new function to create a much of Charities at once for voting
+    function createVote(address[] memory _addressesOfCharities, uint _voteExpirationTime) public {
+        for (uint i = 0; i < _addressesOfCharities.length; i++) {
+            createCharity("", _voteExpirationTime, _addressesOfCharities[i]);
+        }
+    }
+
     /**
-    * @dev Creates a new proposal.
-    * @param _description the text of the proposal
+    * @dev Creates a new Charity.
+    * @param _description the text of the Charity
     * @param _voteExpirationTime expiration time in minutes
     */
-    function createProposal(
-        string calldata _description,
-        uint _voteExpirationTime
-    ) external onlyOwner returns (uint) {
+    function createCharity(
+        string memory _description,
+        uint _voteExpirationTime,
+        address _addressOfCharity
+    ) internal onlyOwner returns (uint) {
         require(_voteExpirationTime > 0, "The voting period cannot be 0");
-        ProposalCount++;
+        CharityCount++;
 
-        Proposal storage curProposal = Proposals[ProposalCount];
-        curProposal.creator = msg.sender;
-        curProposal.status = ProposalStatus.IN_PROGRESS;
-        curProposal.expirationTime = now + 60 * _voteExpirationTime * 1 seconds;
-        curProposal.description = _description;
+        Charity storage curCharity = Charitys[CharityCount];
+        curCharity.creator = msg.sender;
+        curCharity.status = CharityStatus.IN_PROGRESS;
+        curCharity.expirationTime = now + 60 * _voteExpirationTime * 1 seconds;
+        curCharity.description = _description;
+        curCharity.addressOfCharity = _addressOfCharity; // <-- new
 
-        emit ProposalCreated(
+        emit CharityCreated(
             msg.sender,
-            ProposalCount,
+            CharityCount,
             _description,
             _voteExpirationTime
         );
-        return ProposalCount;
+        return CharityCount;
     }
 
     /**
-    * @dev sets a proposal to TALLY.
-    * @param _ProposalID the proposal id
+    * @dev sets a Charity to TALLY.
+    * @param _CharityID the Charity id
     */
-    function setProposalToTally(uint _ProposalID)
+    function setCharityToTally(uint _CharityID)
         external
-        validProposal(_ProposalID)
+        validCharity(_CharityID)
         onlyOwner
     {
         require(
-            Proposals[_ProposalID].status == ProposalStatus.IN_PROGRESS,
+            Charitys[_CharityID].status == CharityStatus.IN_PROGRESS,
             "Vote is not in progress"
         );
         require(
-            now >= getProposalExpirationTime(_ProposalID),
+            now >= getCharityExpirationTime(_CharityID),
             "voting period has not expired"
         );
-        Proposals[_ProposalID].status = ProposalStatus.TALLY;
+        Charitys[_CharityID].status = CharityStatus.TALLY;
     }
 
     /**
-    * @dev sets a proposal to ENDED.
-    * @param _ProposalID the proposal id
+    * @dev sets a Charity to ENDED.
+    * @param _CharityID the Charity id
     */
-    function setProposalToEnded(uint _ProposalID)
+    function setCharityToEnded(uint _CharityID)
         external
-        validProposal(_ProposalID)
+        validCharity(_CharityID)
         onlyOwner
     {
         require(
-            Proposals[_ProposalID].status == ProposalStatus.TALLY,
-            "Proposal should be in tally"
+            Charitys[_CharityID].status == CharityStatus.TALLY,
+            "Charity should be in tally"
         );
         require(
-            now >= getProposalExpirationTime(_ProposalID),
+            now >= getCharityExpirationTime(_CharityID),
             "voting period has not expired"
         );
-        Proposals[_ProposalID].status = ProposalStatus.ENDED;
+        Charitys[_CharityID].status = CharityStatus.ENDED;
     }
 
     /**
-    * @dev returns the status of a proposal
-    * @param _ProposalID the proposal id
+    * @dev returns the status of a Charity
+    * @param _CharityID the Charity id
     */
-    function getProposalStatus(uint _ProposalID)
+    function getCharityStatus(uint _CharityID)
         public
         view
-        validProposal(_ProposalID)
-        returns (ProposalStatus)
+        validCharity(_CharityID)
+        returns (CharityStatus)
     {
-        return Proposals[_ProposalID].status;
+        return Charitys[_CharityID].status;
     }
 
     /**
-    * @dev returns a proposal expiration time
-    * @param _ProposalID the proposal id
+    * @dev returns a Charity expiration time
+    * @param _CharityID the Charity id
     */
-    function getProposalExpirationTime(uint _ProposalID)
+    function getCharityExpirationTime(uint _CharityID)
         public
         view
-        validProposal(_ProposalID)
+        validCharity(_CharityID)
         returns (uint)
     {
-        return Proposals[_ProposalID].expirationTime;
+        return Charitys[_CharityID].expirationTime;
     }
 
     /**
-    * @dev counts the votes for a proposal. Returns (yeays, nays)
-    * @param _ProposalID the proposal id
+    * @dev counts the votes for a Charity. Returns (yeays, nays)
+    * @param _CharityID the Charity id
     */
-    function countVotes(uint256 _ProposalID) public view returns (uint, uint) {
+    function countVotes(uint256 _CharityID) public view returns (uint, uint) {
         uint yesVotes = 0;
         uint noVotes = 0;
 
-        address[] memory voters = Proposals[_ProposalID].voters;
+        address[] memory voters = Charitys[_CharityID].voters;
         for (uint i = 0; i < voters.length; i++) {
             address voter = voters[i];
-            bool vote = Proposals[_ProposalID].voterInfo[voter].vote;
-            uint256 weight = Proposals[_ProposalID].voterInfo[voter].weight;
+            bool vote = Charitys[_CharityID].voterInfo[voter].vote;
+            uint256 weight = Charitys[_CharityID].voterInfo[voter].weight;
             if (vote == true) {
                 yesVotes += weight;
             } else {
@@ -193,66 +203,67 @@ contract WildCardsQV is Ownable, MinterRole {
 
     /**
     * @dev casts a vote.
-    * @param _ProposalID the proposal id
+    * @param _CharityID the Charity id
     * @param numTokens number of voice credits
-    * @param _vote true for yes, false for no
     */
-    function castVote(uint _ProposalID, uint numTokens, bool _vote)
+    //changed to remove option of no vote
+    function castVote(uint _CharityID, uint numTokens )
         external
-        validProposal(_ProposalID)
+        validCharity(_CharityID)
     {
         require(
-            getProposalStatus(_ProposalID) == ProposalStatus.IN_PROGRESS,
-            "proposal has expired."
+            getCharityStatus(_CharityID) == CharityStatus.IN_PROGRESS,
+            "Charity has expired."
         );
         require(
-            !userHasVoted(_ProposalID, msg.sender),
-            "user already voted on this proposal"
+            !userHasVoted(_CharityID, msg.sender),
+            "user already voted on this Charity"
         );
         require(
-            getProposalExpirationTime(_ProposalID) > now,
-            "for this proposal, the voting time expired"
+            getCharityExpirationTime(_CharityID) > now,
+            "for this Charity, the voting time expired"
         );
 
+        bool _vote = true; // no negative votes
         _balances[msg.sender] = _balances[msg.sender].sub(numTokens);
 
         uint256 weight = sqrt(numTokens); // QV Vote
 
-        Proposal storage curproposal = Proposals[_ProposalID];
+        Charity storage curCharity = Charitys[_CharityID];
 
-        curproposal.voterInfo[msg.sender] = Voter({
+        curCharity.voterInfo[msg.sender] = Voter({
             hasVoted: true,
             vote: _vote,
             weight: weight
         });
 
-        curproposal.voters.push(msg.sender);
+        curCharity.voters.push(msg.sender);
 
-        emit VoteCasted(msg.sender, _ProposalID, weight);
+        emit VoteCasted(msg.sender, _CharityID, weight);
     }
 
     /**
     * @dev checks if a user has voted
-    * @param _ProposalID the proposal id
+    * @param _CharityID the Charity id
     * @param _user the address of a voter
     */
-    function userHasVoted(uint _ProposalID, address _user)
+    function userHasVoted(uint _CharityID, address _user)
         internal
         view
-        validProposal(_ProposalID)
+        validCharity(_CharityID)
         returns (bool)
     {
-        return (Proposals[_ProposalID].voterInfo[_user].hasVoted);
+        return (Charitys[_CharityID].voterInfo[_user].hasVoted);
     }
 
     /**
-    * @dev checks if a proposal id is valid
-    * @param _ProposalID the proposal id
+    * @dev checks if a Charity id is valid
+    * @param _CharityID the Charity id
     */
-    modifier validProposal(uint _ProposalID) {
+    modifier validCharity(uint _CharityID) {
         require(
-            _ProposalID > 0 && _ProposalID <= ProposalCount,
-            "Not a valid Proposal Id"
+            _CharityID > 0 && _CharityID <= CharityCount,
+            "Not a valid Charity Id"
         );
         _;
     }
@@ -274,16 +285,14 @@ contract WildCardsQV is Ownable, MinterRole {
     * @dev minting more tokens for an account
     */
     //remove only owner so anyone with ERC721s can mint themselves vote as long as they have the ERC721
-    function mint(address account, uint256 amount) public  {
-        require(account != address(0), " mint to the zero address");
+    function mint(uint256 amount) public  {
         require(amount >= oneToken, " Minium vote one token");
         // check they have ERC721
         require(wildCardToken.balanceOf(msg.sender)>0, "Does not own a WildCard");
         //burn their loyalty tokens:
         require(loyaltyToken.transferFrom(msg.sender,burnAddress,amount),"Loyalty Token transfer failed");
-
         _totalSupply = _totalSupply.add(amount);
-        _balances[account] = _balances[account].add(amount);
+        _balances[msg.sender] = _balances[msg.sender].add(amount);
     }
 
     /**
