@@ -33,7 +33,7 @@
     "truffle-assertions": "^0.9.1",
     "truffle-contract": "^4.0.11",
     "truffle-hdwallet-provider": "1.0.5",
-    "truffle-privatekey-provider": "^1.1.0",
+    "truffle-privatekey-provider": "^1.5.0",
     "web3": "1.0.0-beta.48"
   },
   "keywords": [
